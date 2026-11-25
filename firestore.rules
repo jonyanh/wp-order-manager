@@ -1,0 +1,102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Admin check: Either email is admin@gmail.com, or custom claim role is admin, or Firestore user doc is admin
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'admin@gmail.com' ||
+        request.auth.token.role == 'admin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+    }
+
+    function isCustomer(customerId) {
+      return isSignedIn() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.customerId == customerId
+      );
+    }
+
+    // USERS COLLECTION
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // CUSTOMERS COLLECTION
+    match /customers/{customerId} {
+      allow read, write: if isAdmin() || isCustomer(customerId);
+    }
+
+    // SERVICES COLLECTION
+    match /services/{serviceId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ORDERS COLLECTION
+    match /orders/{orderId} {
+      allow read: if isAdmin() || isCustomer(resource.data.customerId);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // QUOTATIONS COLLECTION
+    match /quotations/{quotationId} {
+      allow read: if isAdmin() || isCustomer(resource.data.customerId);
+      allow write: if isAdmin();
+    }
+
+    // PAYMENTS COLLECTION
+    match /payments/{paymentId} {
+      allow read: if isAdmin() || isCustomer(resource.data.customerId);
+      allow write: if isAdmin();
+    }
+
+    // PROJECTS COLLECTION
+    match /projects/{projectId} {
+      allow read: if isAdmin() || isCustomer(resource.data.customerId);
+      allow write: if isAdmin();
+    }
+
+    // TASKS COLLECTION
+    match /tasks/{taskId} {
+      allow read: if isAdmin() || (resource.data.visibleToCustomer == true);
+      allow write: if isAdmin();
+    }
+
+    // HOSTING & DOMAINS
+    match /hosting_domains/{id} {
+      allow read: if isAdmin() || isCustomer(resource.data.customerId);
+      allow write: if isAdmin();
+    }
+
+    // SUPPORT REQUESTS
+    match /support_requests/{reqId} {
+      allow read: if isAdmin() || isCustomer(resource.data.customerId);
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // HANDOVERS
+    match /handovers/{handoverId} {
+      allow read: if isAdmin() || isCustomer(resource.data.customerId);
+      allow write: if isAdmin();
+    }
+
+    // SETTINGS
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Test ping
+    match /test_conn/{docId} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}
